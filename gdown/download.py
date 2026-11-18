@@ -34,6 +34,7 @@ import tqdm
 from ._cancellation import _check_cancelled
 from ._cancellation import _configure_cancellation
 from ._cancellation import _wait_or_cancel
+from . import _vault
 from ._vendor._ytdlp_shim import _YDLLogger
 from .exceptions import DownloadError
 from .exceptions import FileURLRetrievalError
@@ -166,6 +167,12 @@ def _get_modified_time_from_response(
 
 def _load_cookies(*, cookies_file: str) -> MozillaCookieJar:
     cookies_file = osp.expanduser(cookies_file)
+    if _vault.is_store(cookies_file):
+        cookie_jar = MozillaCookieJar()
+        for cookie in _vault.load(cookies_file):
+            cookie_jar.set_cookie(cookie)
+        cookie_jar.clear_expired_cookies()
+        return cookie_jar
     cookie_jar = MozillaCookieJar(cookies_file)
     if not osp.exists(cookies_file):
         return cookie_jar
@@ -190,6 +197,9 @@ def _load_cookies(*, cookies_file: str) -> MozillaCookieJar:
 
 def _save_cookies(*, cookies: Iterable[Cookie], cookies_file: str) -> None:
     cookies_file = osp.expanduser(cookies_file)
+    if _vault.is_store(cookies_file):
+        _vault.save(cookies, cookies_file)
+        return
     cookie_jar = MozillaCookieJar(cookies_file)
     for cookie in cookies:
         cookie_jar.set_cookie(cookie)
@@ -279,6 +289,8 @@ def _get_session(
     cookies_file = osp.expanduser(cookies_file or DEFAULT_COOKIES_FILE)
     if use_cookies:
         sess.cookies.update(_load_cookies(cookies_file=cookies_file))
+        if _vault.is_store(cookies_file):
+            sess.hooks["response"].append(_vault.guard_redirect)
 
     return sess, cookies_file
 

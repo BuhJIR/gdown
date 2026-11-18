@@ -12,6 +12,7 @@ import requests
 import urllib3
 
 from . import __version__
+from . import _vault
 from ._vendor._ytdlp_cookies import SUPPORTED_BROWSERS
 from .download import DEFAULT_COOKIES_FILE
 from .download import GoogleDriveFileToDownload
@@ -19,6 +20,7 @@ from .download import _import_cookies_from_browser
 from .download import download
 from .download_folder import download_folder
 from .exceptions import DownloadError
+from .exceptions import FileURLRetrievalError
 from .parse_url import _parse_google_drive_folder_id
 
 BROWSERS: Final = tuple(sorted(SUPPORTED_BROWSERS))
@@ -69,6 +71,11 @@ def _is_timeout(error: Exception, /) -> bool:
 
 
 def main() -> None:
+    if len(sys.argv) > 1 and sys.argv[1] in ("login", "logout", "whoami"):
+        from ._login import main as login_main  # noqa: PLC0415
+
+        sys.exit(login_main(sys.argv[1:]))
+
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
@@ -183,7 +190,22 @@ def main() -> None:
         "(default: wait forever)",
     )
 
+    parser.add_argument(
+        "--vault",
+        action="store_true",
+        help="unlock the encrypted cookie store saved by `gdown login` for this "
+        "run; without it the store opens only when Drive asks for sign-in",
+    )
+
     args = parser.parse_args()
+
+    if args.vault:
+        if args.no_cookies or "cookies" in args or args.cookies_from_browser:
+            parser.error(
+                "--vault cannot be combined with --cookies, --no-cookies or "
+                "--cookies-from-browser"
+            )
+        args.cookies = _vault.STORE_FILE
 
     if args.json and args.output is not None:
         parser.error("--json cannot be combined with -O/--output")
@@ -313,6 +335,23 @@ def main() -> None:
                 )
             print(json.dumps(entries, ensure_ascii=False, indent=2))
     except DownloadError as e:
+        if (
+            isinstance(e, FileURLRetrievalError)
+            and not args.vault
+            and not args.no_cookies
+            and "cookies" not in args
+            and not args.cookies_from_browser
+            and _vault.exists()
+        ):
+            print(
+                "Drive wants a signed-in account; retrying with the cookie store.",
+                file=sys.stderr,
+            )
+            sys.stderr.flush()
+            os.execv(
+                sys.executable,
+                [sys.executable, "-m", "gdown", "--vault", *sys.argv[1:]],
+            )
         print(e, file=sys.stderr)
         sys.exit(1)
     except requests.exceptions.ProxyError as e:

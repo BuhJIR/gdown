@@ -290,3 +290,18 @@ just lint    # run linters
 ## License
 
 MIT ([LICENSE](https://github.com/wkentaro/gdown/blob/main/LICENSE))
+
+## Encrypted sign-in (this fork)
+
+Sign in to Google in your own browser, export the cookies, and seal them:
+
+```bash
+gdown login --from-file cookies.txt --shred   # or paste on stdin; --passphrase to lock with a passphrase
+gdown whoami                                  # which account the store is signed in as
+gdown --vault <file-id>                       # use the store for this run
+gdown logout --forget-key
+```
+
+The store (`~/.config/gdown/cookies.enc`, AES-256-GCM, mode 0600) stays sealed
+unless `--vault` is given or Drive answers that the file needs sign-in. While it
+is open, every request and redirect must stay on https Google hosts.
