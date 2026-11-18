@@ -348,10 +348,8 @@ def main() -> None:
                 file=sys.stderr,
             )
             sys.stderr.flush()
-            os.execv(
-                sys.executable,
-                [sys.executable, "-m", "gdown", "--vault", *sys.argv[1:]],
-            )
+            head = sys.orig_argv[: len(sys.orig_argv) - len(sys.argv) + 1]
+            os.execv(sys.executable, [*head, "--vault", *sys.argv[1:]])
         print(e, file=sys.stderr)
         sys.exit(1)
     except requests.exceptions.ProxyError as e:
